@@ -630,9 +630,15 @@ function Show-WorktreeMenu {
         elseif ($key.VirtualKeyCode -eq 13) { # Enter
             $selectedWorktree = $otherWorktrees[$selectedIndex]
             Clear-Host
-            Write-Host "Selected: $($selectedWorktree.Branch) at $($selectedWorktree.Path)" -ForegroundColor Green
+            Write-Host "Opening: $($selectedWorktree.Branch) at $($selectedWorktree.Path)" -ForegroundColor Green
             Start-VSCode -Path $selectedWorktree.Path
-            return
+            
+            Write-Host ""
+            Write-Host "Press any key to return to menu..." -ForegroundColor Cyan
+            $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
+            
+            # Refresh the display and continue
+            Show-WorktreeList -Worktrees $otherWorktrees -SelectedIndex $selectedIndex -StartLine 0
         }
         elseif ($key.VirtualKeyCode -eq 27) { # Escape
             Clear-Host
@@ -642,9 +648,15 @@ function Show-WorktreeMenu {
         elseif ($key.VirtualKeyCode -eq 79) { # o key (Open) - VirtualKeyCode 79
             $selectedWorktree = $otherWorktrees[$selectedIndex]
             Clear-Host
-            Write-Host "Selected: $($selectedWorktree.Branch) at $($selectedWorktree.Path)" -ForegroundColor Green
+            Write-Host "Opening: $($selectedWorktree.Branch) at $($selectedWorktree.Path)" -ForegroundColor Green
             Start-VSCode -Path $selectedWorktree.Path
-            return
+            
+            Write-Host ""
+            Write-Host "Press any key to return to menu..." -ForegroundColor Cyan
+            $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
+            
+            # Refresh the display and continue
+            Show-WorktreeList -Worktrees $otherWorktrees -SelectedIndex $selectedIndex -StartLine 0
         }
         elseif ($key.VirtualKeyCode -eq 80) { # p key (Push) - VirtualKeyCode 80
             $selectedWorktree = $otherWorktrees[$selectedIndex]
