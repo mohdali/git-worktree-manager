@@ -1,7 +1,8 @@
 #!/usr/bin/env pwsh
 
 param(
-    [string]$BranchName = ""
+    [string]$BranchName = "",
+    [int]$RefreshInterval = 30  # Status refresh interval in seconds (0 to disable)
 )
 
 # Helper function to generate random hash
@@ -407,10 +408,15 @@ function Show-WorktreeList {
         Write-Host "===================" -ForegroundColor Cyan
         Write-Host ""
         Write-Host "↑/↓: Navigate | Enter/o: Open | p: Push | D: Delete | n: New | Esc/q: Quit" -ForegroundColor Yellow
+        if ($global:RefreshEnabled) {
+            Write-Host "Status refresh: every $($global:RefreshInterval)s" -ForegroundColor DarkGray
+        } else {
+            Write-Host "Status refresh: disabled" -ForegroundColor DarkGray
+        }
         Write-Host ""
         Write-Host "Available worktrees:" -ForegroundColor Green
         Write-Host ""
-        $StartLine = 7
+        $StartLine = 9  # Updated to account for refresh status line
     }
     
     # Set cursor position to start of worktree list
@@ -451,13 +457,37 @@ function Show-WorktreeList {
 function Start-StatusUpdate {
     param([array]$Worktrees, [int]$SelectedIndex, [int]$StartLine)
     
+    # Save current cursor position
+    $savedPosition = $Host.UI.RawUI.CursorPosition
+    
+    # Show refresh indicator
+    $Host.UI.RawUI.CursorPosition = @{X=0; Y=6}
+    Write-Host "Refreshing status... " -ForegroundColor DarkGray -NoNewline
+    
     # Load status for all worktrees in background
+    $refreshCount = 0
     for ($i = 0; $i -lt $Worktrees.Count; $i++) {
         $wt = $Worktrees[$i]
-        if (-not $global:StatusCache.ContainsKey($wt.Path)) {
-            $null = Get-WorktreeStatus -WorktreePath $wt.Path
+        # Force refresh by removing from cache first
+        if ($global:StatusCache.ContainsKey($wt.Path)) {
+            $global:StatusCache.Remove($wt.Path)
+        }
+        $null = Get-WorktreeStatus -WorktreePath $wt.Path
+        $refreshCount++
+        
+        # Update progress indicator
+        if ($refreshCount % 2 -eq 0) {
+            $Host.UI.RawUI.CursorPosition = @{X=20; Y=6}
+            Write-Host "[$refreshCount/$($Worktrees.Count)]" -ForegroundColor DarkGray -NoNewline
         }
     }
+    
+    # Clear refresh indicator
+    $Host.UI.RawUI.CursorPosition = @{X=0; Y=6}
+    Write-Host "                                        " -NoNewline
+    
+    # Restore cursor position
+    $Host.UI.RawUI.CursorPosition = $savedPosition
     
     # Refresh display with loaded status
     Show-WorktreeList -Worktrees $Worktrees -SelectedIndex $SelectedIndex -StartLine $StartLine -LoadStatus $true
@@ -585,7 +615,7 @@ function Show-WorktreeMenu {
     
     # Initialize selection
     $selectedIndex = 0
-    $startLine = 7
+    $startLine = 9  # Updated to account for refresh status line
     
     # Display initial menu without status (fast)
     Show-WorktreeList -Worktrees $otherWorktrees -SelectedIndex $selectedIndex -StartLine 0
@@ -606,10 +636,47 @@ function Show-WorktreeMenu {
     Start-Sleep -Milliseconds 100
     Start-StatusUpdate -Worktrees $otherWorktrees -SelectedIndex $selectedIndex -StartLine $startLine
     
+    # Setup periodic status refresh timer
+    $global:LastRefreshTime = [DateTime]::Now
+    $global:RefreshInterval = $RefreshInterval  # Use parameter value
+    $global:PendingRefresh = $false
+    $global:RefreshEnabled = $RefreshInterval -gt 0
+    
     # Handle keyboard navigation
     $refreshNeeded = $false
     do {
-        $key = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
+        # Check if we need to refresh status (non-blocking)
+        if ($global:RefreshEnabled -and ([DateTime]::Now - $global:LastRefreshTime).TotalSeconds -ge $global:RefreshInterval) {
+            $global:PendingRefresh = $true
+            $global:LastRefreshTime = [DateTime]::Now
+        }
+        
+        # Check for keyboard input with timeout
+        $keyAvailable = $Host.UI.RawUI.KeyAvailable
+        
+        if ($keyAvailable) {
+            $key = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
+        } elseif ($global:PendingRefresh) {
+            # No key pressed and refresh is pending - do background refresh
+            $global:PendingRefresh = $false
+            
+            # Clear status cache to force refresh
+            Clear-StatusCache
+            
+            # Update status for all worktrees in background
+            Start-StatusUpdate -Worktrees $otherWorktrees -SelectedIndex $selectedIndex -StartLine $startLine
+            
+            # Small delay to allow UI to update
+            Start-Sleep -Milliseconds 100
+            continue
+        } else {
+            # No key pressed and no refresh pending - small delay to prevent CPU spinning
+            Start-Sleep -Milliseconds 100
+            continue
+        }
+        
+        # Reset refresh timer on any key press
+        $global:LastRefreshTime = [DateTime]::Now
         
         # Debug output (temporary)
         # Write-Host "DEBUG: VirtualKeyCode=$($key.VirtualKeyCode), KeyChar='$($key.KeyChar)', Character='$($key.Character)'" -ForegroundColor Magenta
