@@ -166,7 +166,7 @@ function Get-StatusIndicators {
     
     # Remote status with icons
     if (-not $Status.RemoteExists) {
-        $indicators += "⚠️"
+        $indicators += "📍"  # Local only branch
     } else {
         if ($Status.AheadCount -gt 0) { $indicators += "↑$($Status.AheadCount)" }
         if ($Status.BehindCount -gt 0) { $indicators += "↓$($Status.BehindCount)" }
@@ -182,6 +182,28 @@ function Get-StatusIndicators {
 # Helper function to clear status cache
 function Clear-StatusCache {
     $global:StatusCache.Clear()
+}
+
+# Helper function to cleanup local branch after worktree removal
+function Remove-LocalBranch {
+    param([string]$BranchName)
+    
+    # Delete local branch if it still exists
+    Write-Host ""
+    Write-Host "Cleaning up local branch..." -ForegroundColor Yellow
+    $branchOutput = git branch -d "$BranchName" 2>&1
+    
+    if ($LASTEXITCODE -eq 0) {
+        Write-Host "✅ Local branch deleted successfully!" -ForegroundColor Green
+    } else {
+        # Try force delete if regular delete fails
+        $branchOutput = git branch -D "$BranchName" 2>&1
+        if ($LASTEXITCODE -eq 0) {
+            Write-Host "✅ Local branch force deleted successfully!" -ForegroundColor Green
+        } else {
+            Write-Host "⚠️  Could not delete local branch (may be checked out elsewhere)" -ForegroundColor Yellow
+        }
+    }
 }
 
 # Helper function to push branch to remote
@@ -251,7 +273,8 @@ function Remove-WorktreeWithConfirmation {
         Write-Host ""
         Write-Host "Deleting this worktree will permanently remove:" -ForegroundColor Red
         Write-Host "- All uncommitted changes" -ForegroundColor Red
-        Write-Host "- The local branch and worktree directory" -ForegroundColor Red
+        Write-Host "- The worktree directory" -ForegroundColor Red
+        Write-Host "- The local branch" -ForegroundColor Red
         Write-Host ""
     }
     
@@ -281,6 +304,10 @@ function Remove-WorktreeWithConfirmation {
             
             if ($LASTEXITCODE -eq 0) {
                 Write-Host "✅ Git worktree removed successfully!" -ForegroundColor Green
+                
+                # Cleanup local branch
+                Remove-LocalBranch -BranchName $Worktree.Branch
+                
                 return $true
             } else {
                 Write-Host "❌ Git worktree removal failed:" -ForegroundColor Red
@@ -317,6 +344,10 @@ function Remove-WorktreeWithConfirmation {
                 
                 if ($LASTEXITCODE -eq 0) {
                     Write-Host "✅ Git worktree removed successfully after unlock!" -ForegroundColor Green
+                    
+                    # Cleanup branches
+                    Remove-BranchWithPrompt -BranchName $Worktree.Branch -Status $status
+                    
                     return $true
                 } else {
                     Write-Host "❌ Git worktree removal still failed:" -ForegroundColor Red
@@ -341,6 +372,10 @@ function Remove-WorktreeWithConfirmation {
                             git worktree prune 2>$null
                             
                             Write-Host "✅ Worktree cleanup completed!" -ForegroundColor Green
+                            
+                            # Cleanup branches
+                            Remove-BranchWithPrompt -BranchName $Worktree.Branch -Status $status
+                            
                             return $true
                         } catch {
                             Write-Host "❌ Failed to remove directory manually:" -ForegroundColor Red
@@ -408,6 +443,7 @@ function Show-WorktreeList {
         Write-Host "===================" -ForegroundColor Cyan
         Write-Host ""
         Write-Host "↑/↓: Navigate | Enter/o: Open | p: Push | D: Delete | n: New | Esc/q: Quit" -ForegroundColor Yellow
+        Write-Host "Status: ✓=clean 📍=local-only +=added ~=modified ?=untracked ↑=ahead ↓=behind" -ForegroundColor DarkGray
         if ($global:RefreshEnabled) {
             Write-Host "Status refresh: every $($global:RefreshInterval)s" -ForegroundColor DarkGray
         } else {
@@ -416,7 +452,7 @@ function Show-WorktreeList {
         Write-Host ""
         Write-Host "Available worktrees:" -ForegroundColor Green
         Write-Host ""
-        $StartLine = 9  # Updated to account for refresh status line
+        $StartLine = 10  # Updated to account for status legend and refresh line
     }
     
     # Set cursor position to start of worktree list
@@ -461,7 +497,7 @@ function Start-StatusUpdate {
     $savedPosition = $Host.UI.RawUI.CursorPosition
     
     # Show refresh indicator
-    $Host.UI.RawUI.CursorPosition = @{X=0; Y=6}
+    $Host.UI.RawUI.CursorPosition = @{X=0; Y=7}
     Write-Host "Refreshing status... " -ForegroundColor DarkGray -NoNewline
     
     # Load status for all worktrees in background
@@ -477,13 +513,13 @@ function Start-StatusUpdate {
         
         # Update progress indicator
         if ($refreshCount % 2 -eq 0) {
-            $Host.UI.RawUI.CursorPosition = @{X=20; Y=6}
+            $Host.UI.RawUI.CursorPosition = @{X=20; Y=7}
             Write-Host "[$refreshCount/$($Worktrees.Count)]" -ForegroundColor DarkGray -NoNewline
         }
     }
     
     # Clear refresh indicator
-    $Host.UI.RawUI.CursorPosition = @{X=0; Y=6}
+    $Host.UI.RawUI.CursorPosition = @{X=0; Y=7}
     Write-Host "                                        " -NoNewline
     
     # Restore cursor position
@@ -615,7 +651,7 @@ function Show-WorktreeMenu {
     
     # Initialize selection
     $selectedIndex = 0
-    $startLine = 9  # Updated to account for refresh status line
+    $startLine = 10  # Updated to account for status legend and refresh line
     
     # Display initial menu without status (fast)
     Show-WorktreeList -Worktrees $otherWorktrees -SelectedIndex $selectedIndex -StartLine 0
