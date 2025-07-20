@@ -948,7 +948,6 @@ function New-Worktree {
     # Create the worktree
     try {
         Write-Host "Creating worktree '$BranchName' at: $worktreePath" -ForegroundColor Cyan
-        Write-Host "[DEBUG] Using enhanced error handling v2.0" -ForegroundColor Magenta
         
         # Capture both stdout and stderr from git command
         $gitOutput = git worktree add -b $BranchName $worktreePath 2>&1
@@ -995,5 +994,12 @@ if ([string]::IsNullOrWhiteSpace($BranchName)) {
     Show-WorktreeMenu -RefreshInterval $RefreshInterval
 } else {
     # Create new worktree mode
-    New-Worktree -BranchName $BranchName
+    $result = New-Worktree -BranchName $BranchName
+    if (-not $result) {
+        # If creation failed, show the menu
+        Write-Host ""
+        Write-Host "Returning to worktree manager..." -ForegroundColor Yellow
+        Start-Sleep -Seconds 1
+        Show-WorktreeMenu -RefreshInterval $RefreshInterval
+    }
 }
