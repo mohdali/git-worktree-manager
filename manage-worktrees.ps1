@@ -2,7 +2,7 @@
 
 param(
     [string]$BranchName = "",
-    [int]$RefreshInterval = 30  # Status refresh interval in seconds (0 to disable)
+    [int]$RefreshInterval = -1  # Status refresh interval in seconds (-1 for default, 0 to disable)
 )
 
 # Helper function to generate random hash
@@ -674,9 +674,15 @@ function Show-WorktreeMenu {
     
     # Setup periodic status refresh timer
     $global:LastRefreshTime = [DateTime]::Now
-    $global:RefreshInterval = $RefreshInterval  # Use parameter value
+    # Use default of 30 seconds if -1, otherwise use parameter value
+    if ($RefreshInterval -eq -1) {
+        $global:RefreshInterval = 30
+        $global:RefreshEnabled = $true
+    } else {
+        $global:RefreshInterval = $RefreshInterval
+        $global:RefreshEnabled = $RefreshInterval -gt 0
+    }
     $global:PendingRefresh = $false
-    $global:RefreshEnabled = $RefreshInterval -gt 0
     
     # Handle keyboard navigation
     $refreshNeeded = $false
