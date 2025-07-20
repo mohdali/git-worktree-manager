@@ -1,0 +1,119 @@
+name: Test Worktree Manager
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  test-powershell:
+    name: Test on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup Git
+      run: |
+        git config --global user.email "test@example.com"
+        git config --global user.name "Test User"
+        
+    - name: Run tests (Windows)
+      if: runner.os == 'Windows'
+      shell: pwsh
+      run: |
+        Write-Host "Running tests on Windows..." -ForegroundColor Cyan
+        ./run-tests.ps1 -Verbose
+        
+    - name: Run tests (Linux/macOS)
+      if: runner.os != 'Windows'
+      shell: pwsh
+      run: |
+        Write-Host "Running tests on ${{ runner.os }}..." -ForegroundColor Cyan
+        chmod +x ./run-tests.ps1
+        chmod +x ./manage-worktrees.ps1
+        ./run-tests.ps1 -Verbose
+        
+    - name: Upload test results
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: test-results-${{ matrix.os }}
+        path: |
+          tests/*.log
+          tests/*.xml
+        retention-days: 30
+        
+  test-script-analysis:
+    name: PowerShell Script Analysis
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Install PSScriptAnalyzer
+      shell: pwsh
+      run: |
+        Set-PSRepository PSGallery -InstallationPolicy Trusted
+        Install-Module -Name PSScriptAnalyzer -Force -Scope CurrentUser
+        
+    - name: Run PSScriptAnalyzer
+      shell: pwsh
+      run: |
+        Write-Host "Running PowerShell Script Analyzer..." -ForegroundColor Cyan
+        $results = Invoke-ScriptAnalyzer -Path ./manage-worktrees.ps1 -Recurse
+        
+        if ($results) {
+            Write-Host "Script analysis found issues:" -ForegroundColor Yellow
+            $results | Format-Table -AutoSize
+            
+            # Check for errors
+            $errors = $results | Where-Object { $_.Severity -eq 'Error' }
+            if ($errors) {
+                Write-Host "❌ Script analysis failed with errors!" -ForegroundColor Red
+                exit 1
+            } else {
+                Write-Host "⚠️ Script analysis found warnings only" -ForegroundColor Yellow
+            }
+        } else {
+            Write-Host "✅ Script analysis passed!" -ForegroundColor Green
+        }
+        
+  test-compatibility:
+    name: PowerShell Version Compatibility
+    runs-on: windows-latest
+    strategy:
+      matrix:
+        psversion: ['5.1', '7.4']
+        
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup PowerShell ${{ matrix.psversion }}
+      if: matrix.psversion != '5.1'
+      run: |
+        choco install powershell-core --version=${{ matrix.psversion }} -y
+        
+    - name: Test with PowerShell ${{ matrix.psversion }}
+      shell: pwsh
+      run: |
+        Write-Host "Testing with PowerShell $($PSVersionTable.PSVersion)" -ForegroundColor Cyan
+        
+        # Basic syntax check
+        try {
+            $null = Test-Path ./manage-worktrees.ps1 -ErrorAction Stop
+            & ./manage-worktrees.ps1 -RefreshInterval 0 | Select-Object -First 10
+            Write-Host "✅ Script loads successfully" -ForegroundColor Green
+        } catch {
+            Write-Host "❌ Script failed to load: $_" -ForegroundColor Red
+            exit 1
+        }
