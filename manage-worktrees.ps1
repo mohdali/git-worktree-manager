@@ -435,8 +435,7 @@ function Show-WorktreeList {
         [int]$SelectedIndex,
         [int]$StartLine = 0,
         [bool]$LoadStatus = $false,
-        [int]$RefreshInterval = -1,
-        [bool]$RefreshEnabled = $null
+        [int]$RefreshInterval = -1
     )
     
     if ($StartLine -eq 0) {
@@ -448,20 +447,20 @@ function Show-WorktreeList {
         Write-Host "Status: ✓=clean 📍=local-only +=added ~=modified ?=untracked ↑=ahead ↓=behind" -ForegroundColor DarkGray
         
         # Determine refresh status
-        if ($null -ne $RefreshEnabled) {
-            $showRefreshEnabled = $RefreshEnabled
-            $showRefreshInterval = $RefreshInterval
-        } elseif ($null -ne $global:RefreshEnabled) {
-            $showRefreshEnabled = $global:RefreshEnabled
-            $showRefreshInterval = $global:RefreshInterval
-        } else {
-            # Default behavior
-            $showRefreshEnabled = ($RefreshInterval -ne 0)
-            $showRefreshInterval = if ($RefreshInterval -eq -1) { 30 } else { $RefreshInterval }
+        $actualInterval = $RefreshInterval
+        
+        # Use global if parameter is -1
+        if ($actualInterval -eq -1 -and $null -ne $global:RefreshInterval) {
+            $actualInterval = $global:RefreshInterval
         }
         
-        if ($showRefreshEnabled) {
-            Write-Host "Status refresh: every $($showRefreshInterval)s" -ForegroundColor DarkGray
+        # Default to 30 if still -1
+        if ($actualInterval -eq -1) {
+            $actualInterval = 30
+        }
+        
+        if ($actualInterval -gt 0) {
+            Write-Host "Status refresh: every $($actualInterval)s" -ForegroundColor DarkGray
         } else {
             Write-Host "Status refresh: disabled" -ForegroundColor DarkGray
         }
@@ -542,7 +541,7 @@ function Start-StatusUpdate {
     $Host.UI.RawUI.CursorPosition = $savedPosition
     
     # Refresh display with loaded status
-    Show-WorktreeList -Worktrees $Worktrees -SelectedIndex $SelectedIndex -StartLine $StartLine -LoadStatus $true -RefreshInterval $global:RefreshInterval -RefreshEnabled $global:RefreshEnabled
+    Show-WorktreeList -Worktrees $Worktrees -SelectedIndex $SelectedIndex -StartLine $StartLine -LoadStatus $true -RefreshInterval $global:RefreshInterval
 }
 
 # Interactive mode - list existing worktrees with keyboard navigation
@@ -673,6 +672,7 @@ function Show-WorktreeMenu {
     $startLine = 10  # Updated to account for status legend and refresh line
     
     # Display initial menu without status (fast)
+    # Don't pass RefreshEnabled on initial call since globals aren't set yet
     Show-WorktreeList -Worktrees $otherWorktrees -SelectedIndex $selectedIndex -StartLine 0 -RefreshInterval $RefreshInterval
     
     # Start background status loading
@@ -746,13 +746,13 @@ function Show-WorktreeMenu {
         if ($key.VirtualKeyCode -eq 38) { # Up arrow
             if ($selectedIndex -gt 0) {
                 $selectedIndex--
-                Show-WorktreeList -Worktrees $otherWorktrees -SelectedIndex $selectedIndex -StartLine $startLine -RefreshInterval $RefreshInterval -RefreshEnabled $global:RefreshEnabled
+                Show-WorktreeList -Worktrees $otherWorktrees -SelectedIndex $selectedIndex -StartLine $startLine -RefreshInterval $global:RefreshInterval
             }
         }
         elseif ($key.VirtualKeyCode -eq 40) { # Down arrow
             if ($selectedIndex -lt ($otherWorktrees.Count - 1)) {
                 $selectedIndex++
-                Show-WorktreeList -Worktrees $otherWorktrees -SelectedIndex $selectedIndex -StartLine $startLine -RefreshInterval $RefreshInterval -RefreshEnabled $global:RefreshEnabled
+                Show-WorktreeList -Worktrees $otherWorktrees -SelectedIndex $selectedIndex -StartLine $startLine -RefreshInterval $global:RefreshInterval
             }
         }
         elseif ($key.VirtualKeyCode -eq 13) { # Enter
@@ -766,7 +766,7 @@ function Show-WorktreeMenu {
             $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
             
             # Refresh the display and continue
-            Show-WorktreeList -Worktrees $otherWorktrees -SelectedIndex $selectedIndex -StartLine 0 -RefreshInterval $RefreshInterval -RefreshEnabled $global:RefreshEnabled
+            Show-WorktreeList -Worktrees $otherWorktrees -SelectedIndex $selectedIndex -StartLine 0 -RefreshInterval $global:RefreshInterval
         }
         elseif ($key.VirtualKeyCode -eq 27) { # Escape
             Clear-Host
@@ -784,7 +784,7 @@ function Show-WorktreeMenu {
             $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
             
             # Refresh the display and continue
-            Show-WorktreeList -Worktrees $otherWorktrees -SelectedIndex $selectedIndex -StartLine 0 -RefreshInterval $RefreshInterval -RefreshEnabled $global:RefreshEnabled
+            Show-WorktreeList -Worktrees $otherWorktrees -SelectedIndex $selectedIndex -StartLine 0 -RefreshInterval $global:RefreshInterval
         }
         elseif ($key.VirtualKeyCode -eq 80) { # p key (Push) - VirtualKeyCode 80
             $selectedWorktree = $otherWorktrees[$selectedIndex]
@@ -822,7 +822,7 @@ function Show-WorktreeMenu {
             $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
             
             # Refresh the display
-            Show-WorktreeList -Worktrees $otherWorktrees -SelectedIndex $selectedIndex -StartLine 0 -RefreshInterval $RefreshInterval -RefreshEnabled $global:RefreshEnabled
+            Show-WorktreeList -Worktrees $otherWorktrees -SelectedIndex $selectedIndex -StartLine 0 -RefreshInterval $global:RefreshInterval
         }
         elseif ($key.VirtualKeyCode -eq 68) { # D key (Delete - capital D) - VirtualKeyCode 68
             # Ensure we have a proper array (Windows PowerShell compatibility)
@@ -850,7 +850,7 @@ function Show-WorktreeMenu {
                 $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
                 
                 # Refresh the display
-                Show-WorktreeList -Worktrees $otherWorktrees -SelectedIndex $selectedIndex -StartLine 0 -RefreshInterval $RefreshInterval -RefreshEnabled $global:RefreshEnabled -RefreshInterval $RefreshInterval -RefreshEnabled $global:RefreshEnabled
+                Show-WorktreeList -Worktrees $otherWorktrees -SelectedIndex $selectedIndex -StartLine 0 -RefreshInterval $global:RefreshInterval -RefreshInterval $global:RefreshInterval
             }
         }
         elseif ($key.VirtualKeyCode -eq 78) { # n key (New worktree) - VirtualKeyCode 78
@@ -871,7 +871,7 @@ function Show-WorktreeMenu {
                 $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
                 
                 # Refresh the display
-                Show-WorktreeList -Worktrees $otherWorktrees -SelectedIndex $selectedIndex -StartLine 0 -RefreshInterval $RefreshInterval -RefreshEnabled $global:RefreshEnabled -RefreshInterval $RefreshInterval -RefreshEnabled $global:RefreshEnabled
+                Show-WorktreeList -Worktrees $otherWorktrees -SelectedIndex $selectedIndex -StartLine 0 -RefreshInterval $global:RefreshInterval -RefreshInterval $global:RefreshInterval
             } else {
                 Write-Host ""
                 Write-Host "Creating new worktree with branch: '$branchName'" -ForegroundColor Cyan
@@ -888,7 +888,7 @@ function Show-WorktreeMenu {
                     break
                 } else {
                     # Refresh the display
-                    Show-WorktreeList -Worktrees $otherWorktrees -SelectedIndex $selectedIndex -StartLine 0 -RefreshInterval $RefreshInterval -RefreshEnabled $global:RefreshEnabled -RefreshInterval $RefreshInterval -RefreshEnabled $global:RefreshEnabled -RefreshInterval $RefreshInterval -RefreshEnabled $global:RefreshEnabled
+                    Show-WorktreeList -Worktrees $otherWorktrees -SelectedIndex $selectedIndex -StartLine 0 -RefreshInterval $global:RefreshInterval -RefreshInterval $global:RefreshInterval -RefreshInterval $global:RefreshInterval
                 }
             }
         }
