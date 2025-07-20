@@ -850,7 +850,7 @@ function Show-WorktreeMenu {
                 $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
                 
                 # Refresh the display
-                Show-WorktreeList -Worktrees $otherWorktrees -SelectedIndex $selectedIndex -StartLine 0 -RefreshInterval $global:RefreshInterval -RefreshInterval $global:RefreshInterval
+                Show-WorktreeList -Worktrees $otherWorktrees -SelectedIndex $selectedIndex -StartLine 0 -RefreshInterval $global:RefreshInterval
             }
         }
         elseif ($key.VirtualKeyCode -eq 78) { # n key (New worktree) - VirtualKeyCode 78
@@ -871,7 +871,7 @@ function Show-WorktreeMenu {
                 $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
                 
                 # Refresh the display
-                Show-WorktreeList -Worktrees $otherWorktrees -SelectedIndex $selectedIndex -StartLine 0 -RefreshInterval $global:RefreshInterval -RefreshInterval $global:RefreshInterval
+                Show-WorktreeList -Worktrees $otherWorktrees -SelectedIndex $selectedIndex -StartLine 0 -RefreshInterval $global:RefreshInterval
             } else {
                 Write-Host ""
                 Write-Host "Creating new worktree with branch: '$branchName'" -ForegroundColor Cyan
@@ -888,7 +888,7 @@ function Show-WorktreeMenu {
                     break
                 } else {
                     # Refresh the display
-                    Show-WorktreeList -Worktrees $otherWorktrees -SelectedIndex $selectedIndex -StartLine 0 -RefreshInterval $global:RefreshInterval -RefreshInterval $global:RefreshInterval -RefreshInterval $global:RefreshInterval
+                    Show-WorktreeList -Worktrees $otherWorktrees -SelectedIndex $selectedIndex -StartLine 0 -RefreshInterval $global:RefreshInterval
                 }
             }
         }
@@ -963,9 +963,6 @@ function New-Worktree {
             Write-Host "- Not in a git repository" -ForegroundColor Yellow
             Write-Host "- Invalid branch name characters" -ForegroundColor Yellow
             Write-Host "- Permission issues with target directory" -ForegroundColor Yellow
-            Write-Host ""
-            Write-Host "Press any key to continue..." -ForegroundColor Cyan
-            $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
             return $false
         }
         
@@ -981,9 +978,6 @@ function New-Worktree {
         
     } catch {
         Write-Host "Error: Failed to create worktree: $_" -ForegroundColor Red
-        Write-Host ""
-        Write-Host "Press any key to continue..." -ForegroundColor Cyan
-        $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
         return $false
     }
 }
