@@ -12,20 +12,27 @@ This directory contains comprehensive tests for the Git Worktree Manager script.
 # Run with verbose output
 ./run-tests.ps1 -Verbose
 
-# Stop on first failure
-./run-tests.ps1 -FailFast
-
 # Show help
 ./run-tests.ps1 -Help
 ```
 
 ### Running Specific Test Files
 ```powershell
-# Run main test suite
-./tests/Test-WorktreeManager.ps1
+# Run function unit tests
+./tests/Test-Functions.ps1
 
-# Run interactive mode tests
-./tests/Test-InteractiveMode.ps1
+# Run integration tests
+./tests/Test-Integration.ps1
+```
+
+### Manual Interactive Testing
+Interactive mode requires actual keyboard input and cannot be automated easily. To test interactive features:
+```powershell
+# Test interactive mode
+./manage-worktrees.ps1
+
+# Test with custom refresh interval
+./manage-worktrees.ps1 -RefreshInterval 5
 ```
 
 ## Test Coverage

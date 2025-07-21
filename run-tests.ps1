@@ -55,8 +55,24 @@ $args = @()
 if ($Verbose) { $args += "-Verbose" }
 if ($FailFast) { $args += "-FailFast" }
 
-& $testScript @args
-$exitCode = $LASTEXITCODE
+$totalFailed = 0
+
+# Run function tests
+Write-Host "`n=== Running Function Tests ===" -ForegroundColor Yellow
+& "./tests/Test-Functions.ps1" @args
+$totalFailed += $LASTEXITCODE
+
+# Run integration tests
+Write-Host "`n=== Running Integration Tests ===" -ForegroundColor Yellow
+& "./tests/Test-Integration.ps1" @args
+$totalFailed += $LASTEXITCODE
+
+# Note about interactive tests
+Write-Host "`n=== Interactive Tests ===" -ForegroundColor Yellow
+Write-Host "Interactive tests must be run manually due to keyboard input requirements." -ForegroundColor DarkGray
+Write-Host "To test interactive features, run: ./manage-worktrees.ps1" -ForegroundColor DarkGray
+
+$exitCode = $totalFailed
 
 # Show result
 Write-Host ""

@@ -2,7 +2,8 @@
 
 param(
     [string]$BranchName = "",
-    [int]$RefreshInterval = -1  # Status refresh interval in seconds (-1 for default, 0 to disable)
+    [int]$RefreshInterval = -1,  # Status refresh interval in seconds (-1 for default, 0 to disable)
+    [switch]$TestMode  # Enable test mode for automated testing
 )
 
 # Helper function to generate random hash
