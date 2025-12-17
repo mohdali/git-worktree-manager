@@ -247,6 +247,35 @@ export function WorktreeList({ initialBranchName }: WorktreeListProps) {
     }
   });
 
+  // Calculate viewport window (virtualization for large lists)
+  // Must be called unconditionally before early returns (Rules of Hooks)
+  const viewport = useMemo(() => {
+    const total = worktrees.length;
+    if (total <= VIEWPORT_SIZE) {
+      // No scrolling needed
+      return { start: 0, end: total, hasAbove: false, hasBelow: false };
+    }
+
+    // Center selected item in viewport when possible
+    let start = Math.max(0, selectedIndex - Math.floor(VIEWPORT_SIZE / 2));
+    let end = start + VIEWPORT_SIZE;
+
+    // Adjust if we're near the end
+    if (end > total) {
+      end = total;
+      start = Math.max(0, end - VIEWPORT_SIZE);
+    }
+
+    return {
+      start,
+      end,
+      hasAbove: start > 0,
+      hasBelow: end < total
+    };
+  }, [worktrees.length, selectedIndex]);
+
+  const visibleWorktrees = worktrees.slice(viewport.start, viewport.end);
+
   // Loading state
   if (isLoading) {
     return <Text>Loading worktrees...</Text>;
@@ -274,34 +303,6 @@ export function WorktreeList({ initialBranchName }: WorktreeListProps) {
         return s.added > 0 || s.modified > 0 || s.deleted > 0 || s.untracked > 0;
       })()
     : false;
-
-  // Calculate viewport window (virtualization for large lists)
-  const viewport = useMemo(() => {
-    const total = worktrees.length;
-    if (total <= VIEWPORT_SIZE) {
-      // No scrolling needed
-      return { start: 0, end: total, hasAbove: false, hasBelow: false };
-    }
-
-    // Center selected item in viewport when possible
-    let start = Math.max(0, selectedIndex - Math.floor(VIEWPORT_SIZE / 2));
-    let end = start + VIEWPORT_SIZE;
-
-    // Adjust if we're near the end
-    if (end > total) {
-      end = total;
-      start = Math.max(0, end - VIEWPORT_SIZE);
-    }
-
-    return {
-      start,
-      end,
-      hasAbove: start > 0,
-      hasBelow: end < total
-    };
-  }, [worktrees.length, selectedIndex]);
-
-  const visibleWorktrees = worktrees.slice(viewport.start, viewport.end);
 
   // Main list
   return (
