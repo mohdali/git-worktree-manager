@@ -37,12 +37,37 @@ export async function getWorktreeStatus(
     throw error;
   }
 
-  // Parse file changes
-  const statusLines = statusResult.stdout;
-  status.added = (statusLines.match(/^A /gm) || []).length;
-  status.modified = (statusLines.match(/^(M | M)/gm) || []).length;
-  status.deleted = (statusLines.match(/^(D | D)/gm) || []).length;
-  status.untracked = (statusLines.match(/^\?\?/gm) || []).length;
+  // Parse file changes line by line
+  // Git status --porcelain format: XY filename
+  // X = index status, Y = worktree status
+  // Possible values: ' ', M, A, D, R, C, U, ?
+  const lines = statusResult.stdout.split('\n').filter(l => l.length >= 2);
+
+  for (const line of lines) {
+    const indexStatus = line[0];
+    const worktreeStatus = line[1];
+
+    // Count untracked files
+    if (indexStatus === '?' && worktreeStatus === '?') {
+      status.untracked++;
+      continue;
+    }
+
+    // Count added files (A in index, regardless of worktree status)
+    if (indexStatus === 'A') {
+      status.added++;
+    }
+
+    // Count modified files (M in either index or worktree)
+    if (indexStatus === 'M' || worktreeStatus === 'M') {
+      status.modified++;
+    }
+
+    // Count deleted files (D in either index or worktree)
+    if (indexStatus === 'D' || worktreeStatus === 'D') {
+      status.deleted++;
+    }
+  }
 
   // 2. Get current branch name
   const branchResult = await runGit(

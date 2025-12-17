@@ -58,8 +58,8 @@ export function TextInput({
       return;
     }
 
-    // Handle character input (ignore control keys)
-    if (input && !key.ctrl && !key.meta && !key.shift) {
+    // Handle character input (ignore control keys, allow shift for uppercase)
+    if (input && !key.ctrl && !key.meta) {
       const newValue = value.slice(0, cursorPosition) + input + value.slice(cursorPosition);
       onChange(newValue);
       setCursorPosition(prev => prev + 1);

@@ -22,11 +22,11 @@ const cli = meow(
   }
 );
 
-// Suppress unused variable warning - cli will be used in Task 4+
-void cli;
+// Get branch name from CLI args if provided
+const initialBranchName = cli.input[0] || null;
 
 function App() {
-  return <WorktreeList />;
+  return <WorktreeList initialBranchName={initialBranchName} />;
 }
 
 render(<App />);

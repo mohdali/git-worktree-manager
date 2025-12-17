@@ -1,13 +1,22 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { Box, Text, useInput, useApp } from 'ink';
-import { listWorktrees, getWorktreeStatus, removeWorktree, deleteLocalBranch, pushBranch } from '../git/index.js';
+import { listWorktrees, getWorktreeStatus, removeWorktree, deleteLocalBranch, pushBranch, createWorktree } from '../git/index.js';
 import { Worktree, WorktreeStatus } from '../git/types.js';
 import { WorktreeItem } from './WorktreeItem.js';
 import { openInVSCode, EditorError } from '../utils/editor.js';
 import { CreateWorktreeModal } from './CreateWorktreeModal.js';
 import { ConfirmDialog } from './ConfirmDialog.js';
+import { createLimiter } from '../utils/concurrency.js';
 
-export function WorktreeList() {
+// Viewport configuration
+const VIEWPORT_SIZE = 10; // Max visible items
+const STATUS_CONCURRENCY = 4; // Max concurrent status fetches
+
+interface WorktreeListProps {
+  initialBranchName?: string | null;
+}
+
+export function WorktreeList({ initialBranchName }: WorktreeListProps) {
   const { exit } = useApp();
   const [worktrees, setWorktrees] = useState<Worktree[]>([]);
   const [statuses, setStatuses] = useState<Map<string, WorktreeStatus>>(new Map());
@@ -19,6 +28,7 @@ export function WorktreeList() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Worktree | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const initialCreationAttempted = useRef(false);
 
   // Fetch worktrees (reusable function)
   const fetchWorktrees = useCallback(async () => {
@@ -27,14 +37,17 @@ export function WorktreeList() {
       setWorktrees(wts);
       setIsLoading(false);
 
-      // Fetch status for each worktree (async, non-blocking)
-      wts.forEach(async (wt) => {
-        try {
-          const status = await getWorktreeStatus(wt.path);
-          setStatuses(prev => new Map(prev).set(wt.path, status));
-        } catch (err) {
-          // Ignore status fetch errors (e.g., permissions)
-        }
+      // Fetch status for each worktree with concurrency limiting
+      const limiter = createLimiter(STATUS_CONCURRENCY);
+      wts.forEach((wt) => {
+        limiter(async () => {
+          try {
+            const status = await getWorktreeStatus(wt.path);
+            setStatuses(prev => new Map(prev).set(wt.path, status));
+          } catch {
+            // Ignore status fetch errors (e.g., permissions)
+          }
+        });
       });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unknown error');
@@ -46,6 +59,30 @@ export function WorktreeList() {
   useEffect(() => {
     fetchWorktrees();
   }, [fetchWorktrees]);
+
+  // Handle initial branch creation from CLI args
+  useEffect(() => {
+    if (!initialBranchName || initialCreationAttempted.current) {
+      return;
+    }
+    initialCreationAttempted.current = true;
+
+    const createInitialWorktree = async () => {
+      setMessage({ text: `Creating worktree for '${initialBranchName}'...`, type: 'success' });
+      try {
+        const path = await createWorktree(initialBranchName);
+        setMessage({ text: `Created worktree at ${path}`, type: 'success' });
+        await fetchWorktrees();
+      } catch (err) {
+        setMessage({
+          text: `Failed to create worktree: ${err instanceof Error ? err.message : 'Unknown error'}`,
+          type: 'error'
+        });
+      }
+    };
+
+    createInitialWorktree();
+  }, [initialBranchName, fetchWorktrees]);
 
   // Handle modal close
   const handleModalClose = useCallback((created: boolean) => {
@@ -60,20 +97,25 @@ export function WorktreeList() {
   const handleDeleteConfirm = useCallback(async () => {
     if (!deleteTarget) return;
 
+    // Check if worktree is dirty to determine force flag
+    const targetStatus = statuses.get(deleteTarget.path);
+    const isDirty = targetStatus
+      ? targetStatus.added > 0 || targetStatus.modified > 0 || targetStatus.deleted > 0 || targetStatus.untracked > 0
+      : false;
+
     setShowDeleteConfirm(false);
     setMessage({ text: `Deleting ${deleteTarget.branch || 'worktree'}...`, type: 'success' });
 
     try {
-      // Remove worktree
-      await removeWorktree(deleteTarget.path);
+      // Remove worktree (force if dirty)
+      await removeWorktree(deleteTarget.path, isDirty);
 
       // Delete local branch if it exists
       if (deleteTarget.branch) {
         try {
           await deleteLocalBranch(deleteTarget.branch, true); // force delete
-        } catch (err) {
-          // Branch deletion failure is non-critical, log but continue
-          console.error('Failed to delete branch:', err);
+        } catch {
+          // Branch deletion failure is non-critical, silently continue
         }
       }
 
@@ -87,7 +129,7 @@ export function WorktreeList() {
     } finally {
       setDeleteTarget(null);
     }
-  }, [deleteTarget, fetchWorktrees]);
+  }, [deleteTarget, statuses, fetchWorktrees]);
 
   // Handle delete cancellation
   const handleDeleteCancel = useCallback(() => {
@@ -109,15 +151,13 @@ export function WorktreeList() {
       setSelectedIndex(prev => Math.min(worktrees.length - 1, prev + 1));
     }
 
-    // Open selected worktree in VS Code
+    // Open selected worktree in VS Code (keep TUI open like PS script)
     if (key.return || input === 'o') {
       if (worktrees.length > 0) {
         const selected = worktrees[selectedIndex];
         try {
           await openInVSCode(selected.path);
-          setMessage({ text: `Opening ${selected.path} in VS Code...`, type: 'success' });
-          // Give user brief moment to see success message before exit
-          setTimeout(() => exit(), 300);
+          setMessage({ text: `Opened ${selected.path} in VS Code`, type: 'success' });
         } catch (err) {
           if (err instanceof EditorError) {
             setMessage({ text: err.message, type: 'error' });
@@ -143,6 +183,15 @@ export function WorktreeList() {
       if (selected.isMainWorktree) {
         setMessage({
           text: 'Cannot delete main worktree',
+          type: 'error'
+        });
+        return;
+      }
+
+      // Block current worktree deletion (can't delete where you're running from)
+      if (selected.path === process.cwd()) {
+        setMessage({
+          text: 'Cannot delete current worktree',
           type: 'error'
         });
         return;
@@ -226,6 +275,34 @@ export function WorktreeList() {
       })()
     : false;
 
+  // Calculate viewport window (virtualization for large lists)
+  const viewport = useMemo(() => {
+    const total = worktrees.length;
+    if (total <= VIEWPORT_SIZE) {
+      // No scrolling needed
+      return { start: 0, end: total, hasAbove: false, hasBelow: false };
+    }
+
+    // Center selected item in viewport when possible
+    let start = Math.max(0, selectedIndex - Math.floor(VIEWPORT_SIZE / 2));
+    let end = start + VIEWPORT_SIZE;
+
+    // Adjust if we're near the end
+    if (end > total) {
+      end = total;
+      start = Math.max(0, end - VIEWPORT_SIZE);
+    }
+
+    return {
+      start,
+      end,
+      hasAbove: start > 0,
+      hasBelow: end < total
+    };
+  }, [worktrees.length, selectedIndex]);
+
+  const visibleWorktrees = worktrees.slice(viewport.start, viewport.end);
+
   // Main list
   return (
     <Box flexDirection="column">
@@ -243,16 +320,18 @@ export function WorktreeList() {
         <>
           <Text bold color="cyan">Git Worktree Manager</Text>
           {isRefreshing && <Text color="yellow">Refreshing...</Text>}
-          <Text dimColor>Use arrow keys to navigate</Text>
+          <Text dimColor>Use arrow keys to navigate {worktrees.length > VIEWPORT_SIZE ? `(${selectedIndex + 1}/${worktrees.length})` : ''}</Text>
           <Box marginTop={1} flexDirection="column">
-            {worktrees.map((wt, index) => (
+            {viewport.hasAbove && <Text dimColor>  ↑ {viewport.start} more above</Text>}
+            {visibleWorktrees.map((wt, index) => (
               <WorktreeItem
                 key={wt.path}
                 worktree={wt}
                 status={statuses.get(wt.path) || null}
-                isSelected={index === selectedIndex}
+                isSelected={index + viewport.start === selectedIndex}
               />
             ))}
+            {viewport.hasBelow && <Text dimColor>  ↓ {worktrees.length - viewport.end} more below</Text>}
           </Box>
 
           {/* Message feedback */}

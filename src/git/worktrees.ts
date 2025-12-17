@@ -1,6 +1,7 @@
 import { randomBytes } from 'crypto';
 import { join } from 'path';
 import { homedir } from 'os';
+import { mkdir } from 'fs/promises';
 import { runGit } from './runner.js';
 import { Worktree, GitError } from './types.js';
 
@@ -122,6 +123,9 @@ export async function createWorktree(
   const folderName = generateFolderName(branchName);
   const worktreesBase = basePath || join(homedir(), '.worktrees');
   const worktreePath = join(worktreesBase, folderName);
+
+  // Ensure base directory exists (like PS script)
+  await mkdir(worktreesBase, { recursive: true });
 
   // Create worktree with branch in single operation
   const result = await runGit([
