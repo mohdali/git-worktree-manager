@@ -6,6 +6,7 @@ import { isValidBranchName } from '../git/operations.js';
 
 export interface CreateWorktreeModalProps {
   onClose: (created: boolean) => void;
+  worktreesDir?: string;
 }
 
 /**
@@ -16,7 +17,7 @@ export interface CreateWorktreeModalProps {
  * - Error handling for git operations
  * - Keyboard shortcuts: Enter to submit, Escape to cancel
  */
-export function CreateWorktreeModal({ onClose }: CreateWorktreeModalProps) {
+export function CreateWorktreeModal({ onClose, worktreesDir }: CreateWorktreeModalProps) {
   const [branchName, setBranchName] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -51,7 +52,7 @@ export function CreateWorktreeModal({ onClose }: CreateWorktreeModalProps) {
     setError(null);
 
     try {
-      await createWorktree(branchName);
+      await createWorktree(branchName, worktreesDir);
       onClose(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unknown error');

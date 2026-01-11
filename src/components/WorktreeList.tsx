@@ -14,16 +14,20 @@ const STATUS_CONCURRENCY = 4; // Max concurrent status fetches
 
 interface WorktreeListProps {
   initialBranchName?: string | null;
+  worktreesDir?: string;
+  configError?: string | null;
 }
 
-export function WorktreeList({ initialBranchName }: WorktreeListProps) {
+export function WorktreeList({ initialBranchName, worktreesDir, configError }: WorktreeListProps) {
   const { exit } = useApp();
   const [worktrees, setWorktrees] = useState<Worktree[]>([]);
   const [statuses, setStatuses] = useState<Map<string, WorktreeStatus>>(new Map());
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [message, setMessage] = useState<{ text: string; type: 'error' | 'success' } | null>(null);
+  const [message, setMessage] = useState<{ text: string; type: 'error' | 'success' } | null>(
+    configError ? { text: configError, type: 'error' } : null
+  );
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Worktree | null>(null);
@@ -70,7 +74,7 @@ export function WorktreeList({ initialBranchName }: WorktreeListProps) {
     const createInitialWorktree = async () => {
       setMessage({ text: `Creating worktree for '${initialBranchName}'...`, type: 'success' });
       try {
-        const path = await createWorktree(initialBranchName);
+        const path = await createWorktree(initialBranchName, worktreesDir);
         setMessage({ text: `Created worktree at ${path}`, type: 'success' });
         await fetchWorktrees();
       } catch (err) {
@@ -82,7 +86,7 @@ export function WorktreeList({ initialBranchName }: WorktreeListProps) {
     };
 
     createInitialWorktree();
-  }, [initialBranchName, fetchWorktrees]);
+  }, [initialBranchName, fetchWorktrees, worktreesDir]);
 
   // Handle modal close
   const handleModalClose = useCallback((created: boolean) => {
@@ -316,7 +320,7 @@ export function WorktreeList({ initialBranchName }: WorktreeListProps) {
           onCancel={handleDeleteCancel}
         />
       ) : showCreateModal ? (
-        <CreateWorktreeModal onClose={handleModalClose} />
+        <CreateWorktreeModal onClose={handleModalClose} worktreesDir={worktreesDir} />
       ) : (
         <>
           <Text bold color="cyan">Git Worktree Manager</Text>
