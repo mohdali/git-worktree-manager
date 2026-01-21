@@ -1,4 +1,4 @@
-import { spawn } from 'child_process';
+import { spawn, spawnSync } from 'child_process';
 import { platform } from 'os';
 
 /**
@@ -15,7 +15,14 @@ export class EditorError extends Error {
  * Get the VS Code command for the current platform
  */
 function getVSCodeCommand(): string {
-  return platform() === 'win32' ? 'code.cmd' : 'code';
+  return 'code';
+}
+
+function isCommandAvailable(command: string): boolean {
+  const os = platform();
+  const checker = os === 'win32' ? 'where' : 'which';
+  const result = spawnSync(checker, [command], { stdio: 'ignore', shell: false });
+  return result.status === 0;
 }
 
 /**
@@ -40,11 +47,23 @@ function getInstallationInstructions(): string {
 export async function openInVSCode(path: string): Promise<void> {
   return new Promise((resolve, reject) => {
     const command = getVSCodeCommand();
+    if (!isCommandAvailable(command)) {
+      const instructions = getInstallationInstructions();
+      reject(new EditorError(
+        `VS Code CLI not found. ${instructions}`
+      ));
+      return;
+    }
 
-    const proc = spawn(command, [path], {
+    const isWindows = platform() === 'win32';
+    const spawnCommand = isWindows ? 'cmd.exe' : command;
+    const args = isWindows ? ['/d', '/s', '/c', command, path] : [path];
+
+    const proc = spawn(spawnCommand, args, {
       detached: true,
       stdio: 'ignore',
-      shell: false
+      shell: false,
+      ...(isWindows ? { windowsHide: true } : {})
     });
 
     proc.on('error', (err: NodeJS.ErrnoException) => {
