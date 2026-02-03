@@ -1,34 +1,27 @@
 import { join } from 'path';
 import { readFile, writeFile } from 'fs/promises';
-import { runGit } from './runner.js';
 
 /**
- * Get .env content from current HEAD using `git show HEAD:.env`
- * Uses the current branch/commit when gwm is launched as the source
- * @returns The .env file content, or null if it doesn't exist
- */
-export async function getEnvFromHead(): Promise<string | null> {
-  const result = await runGit(['show', 'HEAD:.env']);
-
-  if (result.exitCode !== 0) {
-    // .env doesn't exist in HEAD
-    return null;
-  }
-
-  return result.stdout;
-}
-
-/**
- * Read existing .env file from a path
+ * Read .env file from a path
  * @param envPath - Path to .env file
  * @returns The .env file content, or null if it doesn't exist
  */
-async function readExistingEnv(envPath: string): Promise<string | null> {
+async function readEnvFile(envPath: string): Promise<string | null> {
   try {
     return await readFile(envPath, 'utf8');
   } catch {
     return null;
   }
+}
+
+/**
+ * Get .env content from the current working directory
+ * This reads from the filesystem (not git) since .env is typically gitignored
+ * @returns The .env file content, or null if it doesn't exist
+ */
+export async function getEnvFromCurrentDir(): Promise<string | null> {
+  const envPath = join(process.cwd(), '.env');
+  return readEnvFile(envPath);
 }
 
 /**
@@ -151,7 +144,7 @@ export function computePortOffset(worktreeName: string): number {
 /**
  * Setup .env for a new worktree
  * - If .env already exists in worktree (tracked or created), merge updates into it
- * - Otherwise, copy .env from default branch if it exists
+ * - Otherwise, copy .env from current directory where gwm was launched
  * - Adds/updates COMPOSE_PROJECT_NAME and PORT_OFFSET
  * @param worktreePath - Full path to the new worktree
  * @param worktreeFolderName - The folder name of the worktree
@@ -164,11 +157,11 @@ export async function setupWorktreeEnv(
     const envPath = join(worktreePath, '.env');
 
     // Check if .env already exists in the worktree (tracked in branch or user-created)
-    let existingContent = await readExistingEnv(envPath);
+    let existingContent = await readEnvFile(envPath);
 
-    // If no existing .env in worktree, try to get from current HEAD
+    // If no existing .env in worktree, try to copy from current working directory
     if (existingContent === null) {
-      existingContent = await getEnvFromHead();
+      existingContent = await getEnvFromCurrentDir();
     }
 
     // Prepare updates

@@ -88,14 +88,26 @@ COMPOSE_PROJECT_NAME=feature-auth_a1b2c3d4
 PORT_OFFSET=42
 ```
 
-You can use `PORT_OFFSET` in your `docker-compose.yml` to offset ports:
+You can use `PORT_OFFSET` in your `docker-compose.yml` to offset ports. Use shell arithmetic to add the offset to your base port:
 
 ```yaml
 services:
   web:
     ports:
-      - "${PORT_OFFSET:-0}80:80"  # Results in port 4280 for offset 42
+      - "${WEB_PORT:-8080}:80"
+  db:
+    ports:
+      - "${DB_PORT:-5432}:5432"
 ```
+
+Then in your `.env.example` or documentation, show how to compute ports:
+```bash
+# Base ports + PORT_OFFSET
+WEB_PORT=$((8080 + ${PORT_OFFSET:-0}))  # 8080 + 42 = 8122
+DB_PORT=$((5432 + ${PORT_OFFSET:-0}))   # 5432 + 42 = 5474
+```
+
+Or use a shell wrapper/Makefile to set these before running docker-compose.
 
 ## Troubleshooting
 
