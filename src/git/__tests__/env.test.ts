@@ -86,7 +86,7 @@ API_KEY=secret123`;
     expect(result).toContain('API_KEY=secret123');
     expect(result).toContain('# Database config');
     expect(result).toContain('COMPOSE_PROJECT_NAME=my-worktree');
-    expect(result).toContain('PORT_OFFSET=427');
+    expect(result).toContain('PORT_OFFSET=42');
     expect(result).toContain('# Added by gwm for docker-compose isolation');
   });
 
@@ -120,7 +120,7 @@ PORT_OFFSET=100`;
 
     expect(result).toContain('# Added by gwm for docker-compose isolation');
     expect(result).toContain('COMPOSE_PROJECT_NAME=my-worktree');
-    expect(result).toContain('PORT_OFFSET=427');
+    expect(result).toContain('PORT_OFFSET=42');
   });
 
   it('should preserve comments in original content', () => {
@@ -150,14 +150,14 @@ OTHER_VAR=keep-me`;
 
     expect(result).toContain('COMPOSE_PROJECT_NAME=new-name');
     expect(result).toContain('OTHER_VAR=keep-me');
-    expect(result).toContain('PORT_OFFSET=999');
+    expect(result).toContain('PORT_OFFSET=99');
     // COMPOSE_PROJECT_NAME updated in place, PORT_OFFSET added at end
     expect(result.match(/COMPOSE_PROJECT_NAME/g)?.length).toBe(1);
   });
 });
 
 describe('computePortOffset', () => {
-  it('should return a number in the valid range (0-999)', () => {
+  it('should return a number in the valid range (0-99)', () => {
     const testNames = [
       'feature-auth_a1b2c3d4',
       'bugfix-login_deadbeef',
@@ -170,7 +170,7 @@ describe('computePortOffset', () => {
     for (const name of testNames) {
       const offset = computePortOffset(name);
       expect(offset).toBeGreaterThanOrEqual(0);
-      expect(offset).toBeLessThan(1000);
+      expect(offset).toBeLessThan(100);
       expect(Number.isInteger(offset)).toBe(true);
     }
   });
@@ -205,12 +205,12 @@ describe('computePortOffset', () => {
   it('should handle empty string', () => {
     const offset = computePortOffset('');
     expect(offset).toBeGreaterThanOrEqual(0);
-    expect(offset).toBeLessThan(1000);
+    expect(offset).toBeLessThan(100);
   });
 
   it('should handle special characters', () => {
     const offset = computePortOffset('feature_auth-system_123');
     expect(offset).toBeGreaterThanOrEqual(0);
-    expect(offset).toBeLessThan(1000);
+    expect(offset).toBeLessThan(100);
   });
 });

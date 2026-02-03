@@ -1,42 +1,34 @@
 import { join } from 'path';
-import { writeFile } from 'fs/promises';
+import { readFile, writeFile } from 'fs/promises';
 import { runGit } from './runner.js';
 
 /**
- * Get the default branch (main or master)
- * @returns The default branch name
- */
-export async function getDefaultBranch(): Promise<string> {
-  // Try 'main' first
-  const mainResult = await runGit(['rev-parse', '--verify', 'main']);
-  if (mainResult.exitCode === 0) {
-    return 'main';
-  }
-
-  // Fall back to 'master'
-  const masterResult = await runGit(['rev-parse', '--verify', 'master']);
-  if (masterResult.exitCode === 0) {
-    return 'master';
-  }
-
-  // Default to 'main' if neither exists
-  return 'main';
-}
-
-/**
- * Get .env content from default branch using `git show <branch>:.env`
+ * Get .env content from current HEAD using `git show HEAD:.env`
+ * Uses the current branch/commit when gwm is launched as the source
  * @returns The .env file content, or null if it doesn't exist
  */
-export async function getEnvFromDefaultBranch(): Promise<string | null> {
-  const defaultBranch = await getDefaultBranch();
-  const result = await runGit(['show', `${defaultBranch}:.env`]);
+export async function getEnvFromHead(): Promise<string | null> {
+  const result = await runGit(['show', 'HEAD:.env']);
 
   if (result.exitCode !== 0) {
-    // .env doesn't exist in the default branch
+    // .env doesn't exist in HEAD
     return null;
   }
 
   return result.stdout;
+}
+
+/**
+ * Read existing .env file from a path
+ * @param envPath - Path to .env file
+ * @returns The .env file content, or null if it doesn't exist
+ */
+async function readExistingEnv(envPath: string): Promise<string | null> {
+  try {
+    return await readFile(envPath, 'utf8');
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -138,10 +130,11 @@ export function serializeEnv(
 }
 
 /**
- * Compute PORT_OFFSET from worktree name (0-999 range using hash)
+ * Compute PORT_OFFSET from worktree name (0-99 range using hash)
  * Deterministic so rebuilding the same worktree gets the same offset
+ * Range limited to 0-99 to keep ports valid when used as prefix (e.g., ${PORT_OFFSET}80 -> max 9980)
  * @param worktreeName - The worktree folder name
- * @returns A number between 0 and 999
+ * @returns A number between 0 and 99
  */
 export function computePortOffset(worktreeName: string): number {
   // Simple hash: sum of char codes
@@ -151,13 +144,14 @@ export function computePortOffset(worktreeName: string): number {
     hash = ((hash << 5) - hash + worktreeName.charCodeAt(i)) | 0;
   }
 
-  // Map to 0-999 range (use absolute value)
-  return Math.abs(hash) % 1000;
+  // Map to 0-99 range (use absolute value)
+  return Math.abs(hash) % 100;
 }
 
 /**
  * Setup .env for a new worktree
- * - Copies .env from default branch if it exists
+ * - If .env already exists in worktree (tracked or created), merge updates into it
+ * - Otherwise, copy .env from default branch if it exists
  * - Adds/updates COMPOSE_PROJECT_NAME and PORT_OFFSET
  * @param worktreePath - Full path to the new worktree
  * @param worktreeFolderName - The folder name of the worktree
@@ -167,19 +161,25 @@ export async function setupWorktreeEnv(
   worktreeFolderName: string
 ): Promise<void> {
   try {
-    // Get existing .env content from default branch
-    const existingContent = await getEnvFromDefaultBranch();
+    const envPath = join(worktreePath, '.env');
+
+    // Check if .env already exists in the worktree (tracked in branch or user-created)
+    let existingContent = await readExistingEnv(envPath);
+
+    // If no existing .env in worktree, try to get from current HEAD
+    if (existingContent === null) {
+      existingContent = await getEnvFromHead();
+    }
 
     // Prepare updates
     const updates = new Map<string, string>();
     updates.set('COMPOSE_PROJECT_NAME', worktreeFolderName);
     updates.set('PORT_OFFSET', String(computePortOffset(worktreeFolderName)));
 
-    // Serialize with updates
+    // Serialize with updates (merges into existing content)
     const newContent = serializeEnv(existingContent || '', updates);
 
     // Write to worktree
-    const envPath = join(worktreePath, '.env');
     await writeFile(envPath, newContent, 'utf8');
   } catch (error) {
     // Log warning but don't fail worktree creation
