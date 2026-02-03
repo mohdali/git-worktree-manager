@@ -1,0 +1,45 @@
+{
+  "name": "git-worktree-manager",
+  "version": "0.1.0",
+  "description": "Cross-platform TUI for managing git worktrees with interactive navigation",
+  "type": "module",
+  "main": "./dist/index.js",
+  "bin": {
+    "gwm": "./dist/index.js"
+  },
+  "scripts": {
+    "dev": "tsx src/index.tsx",
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "start": "node dist/index.js",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "echo 'Linting not configured yet'"
+  },
+  "keywords": [
+    "git",
+    "worktree",
+    "cli",
+    "tui",
+    "terminal"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "chalk": "^5.3.0",
+    "ink": "^5.0.1",
+    "meow": "^13.2.0",
+    "react": "^18.3.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "@types/react": "^18.3.18",
+    "ink-testing-library": "^4.0.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
