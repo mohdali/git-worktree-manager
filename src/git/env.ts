@@ -123,29 +123,10 @@ export function serializeEnv(
 }
 
 /**
- * Compute PORT_OFFSET from worktree name (0-9 range using hash)
- * Deterministic so rebuilding the same worktree gets the same offset
- * Single digit keeps it simple for adding to ports (e.g., 8080 + 5 = 8085)
- * @param worktreeName - The worktree folder name
- * @returns A number between 0 and 9
- */
-export function computePortOffset(worktreeName: string): number {
-  // Simple hash: sum of char codes
-  let hash = 0;
-  for (let i = 0; i < worktreeName.length; i++) {
-    // Use a prime multiplier for better distribution
-    hash = ((hash << 5) - hash + worktreeName.charCodeAt(i)) | 0;
-  }
-
-  // Map to 0-9 range (use absolute value)
-  return Math.abs(hash) % 10;
-}
-
-/**
  * Setup .env for a new worktree
  * - If .env already exists in worktree (tracked or created), merge updates into it
  * - Otherwise, copy .env from current directory where gwm was launched
- * - Adds/updates COMPOSE_PROJECT_NAME and PORT_OFFSET
+ * - Adds/updates COMPOSE_PROJECT_NAME for docker-compose isolation
  * @param worktreePath - Full path to the new worktree
  * @param worktreeFolderName - The folder name of the worktree
  */
@@ -164,10 +145,9 @@ export async function setupWorktreeEnv(
       existingContent = await getEnvFromCurrentDir();
     }
 
-    // Prepare updates
+    // Prepare updates - just COMPOSE_PROJECT_NAME for container/network/volume isolation
     const updates = new Map<string, string>();
     updates.set('COMPOSE_PROJECT_NAME', worktreeFolderName);
-    updates.set('PORT_OFFSET', String(computePortOffset(worktreeFolderName)));
 
     // Serialize with updates (merges into existing content)
     const newContent = serializeEnv(existingContent || '', updates);
