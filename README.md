@@ -68,6 +68,34 @@ Config lookup order:
 
 The `--worktrees-dir` flag overrides `.gwmrc`.
 
+## Docker Compose Isolation
+
+When creating a new worktree, `gwm` automatically sets up a `.env` file for docker-compose isolation:
+
+1. **Copies `.env` from main/master branch** - If a `.env` file exists in the default branch, it's copied to the new worktree
+2. **Sets `COMPOSE_PROJECT_NAME`** - Matches the worktree folder name, ensuring each worktree uses separate docker containers
+3. **Sets `PORT_OFFSET`** - A deterministic value (0-999) based on the worktree name, useful for avoiding port conflicts
+
+Example `.env` in a new worktree:
+
+```env
+# Original content from main branch
+DATABASE_URL=postgres://localhost/dev
+
+# Added by gwm for docker-compose isolation
+COMPOSE_PROJECT_NAME=feature-auth_a1b2c3d4
+PORT_OFFSET=427
+```
+
+You can use `PORT_OFFSET` in your `docker-compose.yml` to offset ports:
+
+```yaml
+services:
+  web:
+    ports:
+      - "${PORT_OFFSET:-0}80:80"  # Results in port 42780 for offset 427
+```
+
 ## Troubleshooting
 
 - "gwm: command not found": run `npm link` (local) or `npm install -g git-worktree-manager`, then restart your shell.

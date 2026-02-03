@@ -4,6 +4,7 @@ import { homedir } from 'os';
 import { mkdir } from 'fs/promises';
 import { runGit } from './runner.js';
 import { Worktree, GitError } from './types.js';
+import { setupWorktreeEnv } from './env.js';
 
 /**
  * List all worktrees in repository
@@ -143,6 +144,9 @@ export async function createWorktree(
     error.command = `git worktree add -b ${branchName} ${worktreePath}`;
     throw error;
   }
+
+  // Setup .env file for docker-compose isolation
+  await setupWorktreeEnv(worktreePath, folderName);
 
   return worktreePath;
 }
