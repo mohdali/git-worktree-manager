@@ -123,11 +123,11 @@ export function serializeEnv(
 }
 
 /**
- * Compute PORT_OFFSET from worktree name (0-99 range using hash)
+ * Compute PORT_OFFSET from worktree name (0-9 range using hash)
  * Deterministic so rebuilding the same worktree gets the same offset
- * Range limited to 0-99 to keep ports valid when used as prefix (e.g., ${PORT_OFFSET}80 -> max 9980)
+ * Single digit keeps it simple for adding to ports (e.g., 8080 + 5 = 8085)
  * @param worktreeName - The worktree folder name
- * @returns A number between 0 and 99
+ * @returns A number between 0 and 9
  */
 export function computePortOffset(worktreeName: string): number {
   // Simple hash: sum of char codes
@@ -137,8 +137,8 @@ export function computePortOffset(worktreeName: string): number {
     hash = ((hash << 5) - hash + worktreeName.charCodeAt(i)) | 0;
   }
 
-  // Map to 0-99 range (use absolute value)
-  return Math.abs(hash) % 100;
+  // Map to 0-9 range (use absolute value)
+  return Math.abs(hash) % 10;
 }
 
 /**

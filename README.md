@@ -75,39 +75,30 @@ When creating a new worktree, `gwm` automatically sets up a `.env` file for dock
 1. **Preserves existing `.env`** - If the worktree already has a `.env` (tracked or user-created), it's preserved and updated
 2. **Copies `.env` from current HEAD** - If no `.env` exists, copies from the current branch when `gwm` is launched
 3. **Sets `COMPOSE_PROJECT_NAME`** - Matches the worktree folder name, ensuring each worktree uses separate docker containers
-4. **Sets `PORT_OFFSET`** - A deterministic value (0-99) based on the worktree name, useful for avoiding port conflicts
+4. **Sets `PORT_OFFSET`** - A single digit (0-9) based on the worktree name, for avoiding port conflicts
 
 Example `.env` in a new worktree:
 
 ```env
-# Original content from source branch
+# Original content from source directory
 DATABASE_URL=postgres://localhost/dev
 
 # Added by gwm for docker-compose isolation
 COMPOSE_PROJECT_NAME=feature-auth_a1b2c3d4
-PORT_OFFSET=42
+PORT_OFFSET=5
 ```
 
-You can use `PORT_OFFSET` in your `docker-compose.yml` to offset ports. Use shell arithmetic to add the offset to your base port:
+Use `PORT_OFFSET` in your `docker-compose.yml`:
 
 ```yaml
 services:
   web:
     ports:
-      - "${WEB_PORT:-8080}:80"
+      - "808${PORT_OFFSET:-0}:80"  # 8080, 8081, ... 8089
   db:
     ports:
-      - "${DB_PORT:-5432}:5432"
+      - "543${PORT_OFFSET:-0}:5432"  # 5430, 5431, ... 5439
 ```
-
-Then in your `.env.example` or documentation, show how to compute ports:
-```bash
-# Base ports + PORT_OFFSET
-WEB_PORT=$((8080 + ${PORT_OFFSET:-0}))  # 8080 + 42 = 8122
-DB_PORT=$((5432 + ${PORT_OFFSET:-0}))   # 5432 + 42 = 5474
-```
-
-Or use a shell wrapper/Makefile to set these before running docker-compose.
 
 ## Troubleshooting
 

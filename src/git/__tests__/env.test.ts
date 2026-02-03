@@ -78,7 +78,7 @@ API_KEY=secret123`;
 
     const updates = new Map<string, string>();
     updates.set('COMPOSE_PROJECT_NAME', 'my-worktree');
-    updates.set('PORT_OFFSET', '427');
+    updates.set('PORT_OFFSET', '5');
 
     const result = serializeEnv(original, updates);
 
@@ -86,26 +86,26 @@ API_KEY=secret123`;
     expect(result).toContain('API_KEY=secret123');
     expect(result).toContain('# Database config');
     expect(result).toContain('COMPOSE_PROJECT_NAME=my-worktree');
-    expect(result).toContain('PORT_OFFSET=42');
+    expect(result).toContain('PORT_OFFSET=5');
     expect(result).toContain('# Added by gwm for docker-compose isolation');
   });
 
   it('should update existing keys instead of duplicating', () => {
     const original = `DATABASE_URL=postgres://localhost/dev
 COMPOSE_PROJECT_NAME=old-name
-PORT_OFFSET=100`;
+PORT_OFFSET=1`;
 
     const updates = new Map<string, string>();
     updates.set('COMPOSE_PROJECT_NAME', 'new-name');
-    updates.set('PORT_OFFSET', '500');
+    updates.set('PORT_OFFSET', '7');
 
     const result = serializeEnv(original, updates);
 
     expect(result).toContain('COMPOSE_PROJECT_NAME=new-name');
-    expect(result).toContain('PORT_OFFSET=500');
+    expect(result).toContain('PORT_OFFSET=7');
     // Should not have old values
     expect(result).not.toContain('COMPOSE_PROJECT_NAME=old-name');
-    expect(result).not.toContain('PORT_OFFSET=100');
+    expect(result).not.toContain('PORT_OFFSET=1');
     // Should not have duplicate keys
     expect(result.match(/COMPOSE_PROJECT_NAME/g)?.length).toBe(1);
     expect(result.match(/PORT_OFFSET/g)?.length).toBe(1);
@@ -114,13 +114,13 @@ PORT_OFFSET=100`;
   it('should handle empty original content', () => {
     const updates = new Map<string, string>();
     updates.set('COMPOSE_PROJECT_NAME', 'my-worktree');
-    updates.set('PORT_OFFSET', '427');
+    updates.set('PORT_OFFSET', '5');
 
     const result = serializeEnv('', updates);
 
     expect(result).toContain('# Added by gwm for docker-compose isolation');
     expect(result).toContain('COMPOSE_PROJECT_NAME=my-worktree');
-    expect(result).toContain('PORT_OFFSET=42');
+    expect(result).toContain('PORT_OFFSET=5');
   });
 
   it('should preserve comments in original content', () => {
@@ -144,20 +144,20 @@ OTHER_VAR=keep-me`;
 
     const updates = new Map<string, string>();
     updates.set('COMPOSE_PROJECT_NAME', 'new-name');
-    updates.set('PORT_OFFSET', '999');
+    updates.set('PORT_OFFSET', '9');
 
     const result = serializeEnv(original, updates);
 
     expect(result).toContain('COMPOSE_PROJECT_NAME=new-name');
     expect(result).toContain('OTHER_VAR=keep-me');
-    expect(result).toContain('PORT_OFFSET=99');
+    expect(result).toContain('PORT_OFFSET=9');
     // COMPOSE_PROJECT_NAME updated in place, PORT_OFFSET added at end
     expect(result.match(/COMPOSE_PROJECT_NAME/g)?.length).toBe(1);
   });
 });
 
 describe('computePortOffset', () => {
-  it('should return a number in the valid range (0-99)', () => {
+  it('should return a single digit (0-9)', () => {
     const testNames = [
       'feature-auth_a1b2c3d4',
       'bugfix-login_deadbeef',
@@ -170,7 +170,7 @@ describe('computePortOffset', () => {
     for (const name of testNames) {
       const offset = computePortOffset(name);
       expect(offset).toBeGreaterThanOrEqual(0);
-      expect(offset).toBeLessThan(100);
+      expect(offset).toBeLessThan(10);
       expect(Number.isInteger(offset)).toBe(true);
     }
   });
@@ -186,31 +186,32 @@ describe('computePortOffset', () => {
     expect(offset2).toBe(offset3);
   });
 
-  it('should produce different offsets for different names', () => {
+  it('should produce varied offsets for different names', () => {
+    // With only 10 possible values, we just verify the hash produces some variation
     const names = [
-      'feature-auth_a1b2c3d4',
-      'feature-auth_x9y8z7w6',
-      'bugfix-login_deadbeef',
-      'hotfix-crash_cafebabe'
+      'worktree-a',
+      'worktree-b',
+      'worktree-c',
+      'feature-x',
+      'bugfix-y'
     ];
 
     const offsets = names.map(computePortOffset);
     const uniqueOffsets = new Set(offsets);
 
-    // With good hash distribution, different names should produce different offsets
-    // (statistically very unlikely to have collisions with just 4 inputs)
-    expect(uniqueOffsets.size).toBe(names.length);
+    // Should have at least some variation (not all same value)
+    expect(uniqueOffsets.size).toBeGreaterThan(1);
   });
 
   it('should handle empty string', () => {
     const offset = computePortOffset('');
     expect(offset).toBeGreaterThanOrEqual(0);
-    expect(offset).toBeLessThan(100);
+    expect(offset).toBeLessThan(10);
   });
 
   it('should handle special characters', () => {
     const offset = computePortOffset('feature_auth-system_123');
     expect(offset).toBeGreaterThanOrEqual(0);
-    expect(offset).toBeLessThan(100);
+    expect(offset).toBeLessThan(10);
   });
 });
