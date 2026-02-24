@@ -68,6 +68,12 @@ Config lookup order:
 
 The `--worktrees-dir` flag overrides `.gwmrc`.
 
+## Docker Compose Support
+
+When creating a new worktree, `gwm` copies your `.env` file from the current directory into the new worktree. Since `.env` is typically gitignored, this ensures environment variables are available without manual setup.
+
+Docker Compose automatically uses the folder name as `COMPOSE_PROJECT_NAME`, so each worktree gets isolated containers, networks, and volumes by default — no extra configuration needed.
+
 ## Troubleshooting
 
 - "gwm: command not found": run `npm link` (local) or `npm install -g git-worktree-manager`, then restart your shell.
