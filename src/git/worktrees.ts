@@ -146,7 +146,7 @@ export async function createWorktree(
   }
 
   // Setup .env file for docker-compose isolation
-  await setupWorktreeEnv(worktreePath, folderName);
+  await setupWorktreeEnv(worktreePath);
 
   return worktreePath;
 }

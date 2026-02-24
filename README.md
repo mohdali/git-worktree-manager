@@ -68,25 +68,11 @@ Config lookup order:
 
 The `--worktrees-dir` flag overrides `.gwmrc`.
 
-## Docker Compose Isolation
+## Docker Compose Support
 
-When creating a new worktree, `gwm` automatically sets up a `.env` file for docker-compose isolation:
+When creating a new worktree, `gwm` copies your `.env` file from the current directory into the new worktree. Since `.env` is typically gitignored, this ensures environment variables are available without manual setup.
 
-1. **Copies `.env` from current directory** - If you have a `.env` file where you run `gwm`, it's copied to the new worktree
-2. **Preserves existing `.env`** - If the worktree already has a `.env` (tracked or user-created), it's preserved and updated
-3. **Sets `COMPOSE_PROJECT_NAME`** - Matches the worktree folder name, ensuring each worktree uses separate docker containers, networks, and volumes
-
-Example `.env` in a new worktree:
-
-```env
-# Original content from source directory
-DATABASE_URL=postgres://localhost/dev
-
-# Added by gwm for docker-compose isolation
-COMPOSE_PROJECT_NAME=feature-auth_a1b2c3d4
-```
-
-This ensures that running `docker-compose up` in different worktrees creates isolated container stacks that don't interfere with each other.
+Docker Compose automatically uses the folder name as `COMPOSE_PROJECT_NAME`, so each worktree gets isolated containers, networks, and volumes by default — no extra configuration needed.
 
 ## Troubleshooting
 

@@ -1,164 +1,47 @@
 import { join } from 'path';
-import { readFile, writeFile } from 'fs/promises';
+import { copyFile, access } from 'fs/promises';
+import { constants } from 'fs';
 
 /**
- * Read .env file from a path
- * @param envPath - Path to .env file
- * @returns The .env file content, or null if it doesn't exist
+ * Check if a file exists
  */
-async function readEnvFile(envPath: string): Promise<string | null> {
+async function fileExists(path: string): Promise<boolean> {
   try {
-    return await readFile(envPath, 'utf8');
+    await access(path, constants.F_OK);
+    return true;
   } catch {
-    return null;
+    return false;
   }
 }
 
 /**
- * Get .env content from the current working directory
- * This reads from the filesystem (not git) since .env is typically gitignored
- * @returns The .env file content, or null if it doesn't exist
- */
-export async function getEnvFromCurrentDir(): Promise<string | null> {
-  const envPath = join(process.cwd(), '.env');
-  return readEnvFile(envPath);
-}
-
-/**
- * Parse .env content into key-value map
- * Preserves order and handles comments
- * @param content - Raw .env file content
- * @returns Map of environment variable key-value pairs
- */
-export function parseEnv(content: string): Map<string, string> {
-  const env = new Map<string, string>();
-  const lines = content.split('\n');
-
-  for (const line of lines) {
-    const trimmed = line.trim();
-
-    // Skip empty lines and comments
-    if (!trimmed || trimmed.startsWith('#')) {
-      continue;
-    }
-
-    // Parse KEY=VALUE format
-    const equalIndex = trimmed.indexOf('=');
-    if (equalIndex > 0) {
-      const key = trimmed.substring(0, equalIndex).trim();
-      let value = trimmed.substring(equalIndex + 1).trim();
-
-      // Remove surrounding quotes if present
-      if ((value.startsWith('"') && value.endsWith('"')) ||
-          (value.startsWith("'") && value.endsWith("'"))) {
-        value = value.slice(1, -1);
-      }
-
-      env.set(key, value);
-    }
-  }
-
-  return env;
-}
-
-/**
- * Serialize env map back to .env format
- * Updates existing content, preserving comments and structure
- * @param originalContent - Original .env content (or empty string)
- * @param updates - Key-value pairs to add/update
- * @returns Serialized .env content
- */
-export function serializeEnv(
-  originalContent: string,
-  updates: Map<string, string>
-): string {
-  const lines = originalContent ? originalContent.split('\n') : [];
-  const updatedKeys = new Set<string>();
-  const result: string[] = [];
-
-  // Process existing lines, updating values as needed
-  for (const line of lines) {
-    const trimmed = line.trim();
-
-    // Keep empty lines and comments as-is
-    if (!trimmed || trimmed.startsWith('#')) {
-      result.push(line);
-      continue;
-    }
-
-    // Check if this line has a key we need to update
-    const equalIndex = trimmed.indexOf('=');
-    if (equalIndex > 0) {
-      const key = trimmed.substring(0, equalIndex).trim();
-
-      if (updates.has(key)) {
-        // Update with new value
-        result.push(`${key}=${updates.get(key)}`);
-        updatedKeys.add(key);
-      } else {
-        // Keep original line
-        result.push(line);
-      }
-    } else {
-      result.push(line);
-    }
-  }
-
-  // Add any new keys that weren't in the original
-  const newKeys = [...updates.entries()].filter(([key]) => !updatedKeys.has(key));
-
-  if (newKeys.length > 0) {
-    // Add separator comment if we have content
-    if (result.length > 0 && result[result.length - 1].trim() !== '') {
-      result.push('');
-    }
-    result.push('# Added by gwm for docker-compose isolation');
-
-    for (const [key, value] of newKeys) {
-      result.push(`${key}=${value}`);
-    }
-  }
-
-  return result.join('\n');
-}
-
-/**
- * Setup .env for a new worktree
- * - If .env already exists in worktree (tracked or created), merge updates into it
- * - Otherwise, copy .env from current directory where gwm was launched
- * - Adds/updates COMPOSE_PROJECT_NAME for docker-compose isolation
+ * Copy .env to a new worktree if one doesn't already exist
+ * Docker-compose automatically uses the folder name as COMPOSE_PROJECT_NAME,
+ * so each worktree gets isolated containers, networks, and volumes by default.
+ * We just need to ensure the .env file (which is typically gitignored) is available.
  * @param worktreePath - Full path to the new worktree
- * @param worktreeFolderName - The folder name of the worktree
  */
 export async function setupWorktreeEnv(
-  worktreePath: string,
-  worktreeFolderName: string
+  worktreePath: string
 ): Promise<void> {
   try {
-    const envPath = join(worktreePath, '.env');
+    const targetEnvPath = join(worktreePath, '.env');
 
-    // Check if .env already exists in the worktree (tracked in branch or user-created)
-    let existingContent = await readEnvFile(envPath);
-
-    // If no existing .env in worktree, try to copy from current working directory
-    if (existingContent === null) {
-      existingContent = await getEnvFromCurrentDir();
+    // Don't overwrite if the worktree already has a .env
+    if (await fileExists(targetEnvPath)) {
+      return;
     }
 
-    // Prepare updates - just COMPOSE_PROJECT_NAME for container/network/volume isolation
-    const updates = new Map<string, string>();
-    updates.set('COMPOSE_PROJECT_NAME', worktreeFolderName);
-
-    // Serialize with updates (merges into existing content)
-    const newContent = serializeEnv(existingContent || '', updates);
-
-    // Write to worktree
-    await writeFile(envPath, newContent, 'utf8');
+    // Copy .env from the current working directory (where gwm was launched)
+    const sourceEnvPath = join(process.cwd(), '.env');
+    if (await fileExists(sourceEnvPath)) {
+      await copyFile(sourceEnvPath, targetEnvPath);
+    }
   } catch (error) {
     // Log warning but don't fail worktree creation
     // eslint-disable-next-line no-console
     console.warn(
-      `Warning: Failed to setup .env for worktree: ${error instanceof Error ? error.message : String(error)}`
+      `Warning: Failed to copy .env for worktree: ${error instanceof Error ? error.message : String(error)}`
     );
   }
 }
