@@ -77,11 +77,18 @@ describe('pullBranch', () => {
     await expect(pullBranch('main', '/repo')).rejects.toThrow('Branch has diverged');
   });
 
-  it('throws upstream error when no tracking info', async () => {
+  it('throws remote ref error when branch not found on remote', async () => {
     mockedRunGit.mockResolvedValueOnce({
-      stdout: '', stderr: 'There is no tracking information for the current branch.', exitCode: 1
+      stdout: '', stderr: "fatal: couldn't find remote ref my-branch", exitCode: 1
     });
-    await expect(pullBranch('main', '/repo')).rejects.toThrow('No upstream tracking branch');
+    await expect(pullBranch('my-branch', '/repo')).rejects.toThrow('Remote branch not found');
+  });
+
+  it('throws remote ref error when Remote branch not found', async () => {
+    mockedRunGit.mockResolvedValueOnce({
+      stdout: '', stderr: 'fatal: Remote branch my-branch not found in upstream origin', exitCode: 1
+    });
+    await expect(pullBranch('my-branch', '/repo')).rejects.toThrow('Remote branch not found');
   });
 
   it('throws network error when host unreachable', async () => {

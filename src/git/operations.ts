@@ -50,8 +50,11 @@ export async function pullBranch(
     let message: string;
     if (result.stderr.includes('Not possible to fast-forward')) {
       message = 'Branch has diverged, cannot fast-forward';
-    } else if (result.stderr.includes('no tracking information')) {
-      message = 'No upstream tracking branch configured';
+    } else if (
+      result.stderr.includes("couldn't find remote ref") ||
+      (result.stderr.includes('Remote branch') && result.stderr.includes('not found'))
+    ) {
+      message = 'Remote branch not found';
     } else if (result.stderr.includes('Could not resolve host')) {
       message = 'Network error: could not reach remote';
     } else if (result.stderr.includes('Authentication failed')) {

@@ -264,9 +264,9 @@ export function WorktreeList({ initialBranchName, worktreesDir, configError }: W
         return;
       }
 
-      // Block no remote tracking branch
+      // Block when no corresponding remote branch exists on origin
       if (status.remoteExists === false) {
-        setMessage({ text: 'Cannot pull: no remote tracking branch', type: 'error' });
+        setMessage({ text: 'Cannot pull: no remote branch found on origin', type: 'error' });
         return;
       }
 
