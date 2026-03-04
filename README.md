@@ -74,6 +74,23 @@ When creating a new worktree, `gwm` copies your `.env` file from the current dir
 
 Docker Compose automatically uses the folder name as `COMPOSE_PROJECT_NAME`, so each worktree gets isolated containers, networks, and volumes by default — no extra configuration needed.
 
+## Keybindings
+
+| Key        | Action                                           |
+|------------|--------------------------------------------------|
+| Enter / o  | Open selected worktree in VS Code                |
+| c          | Create a new worktree                            |
+| d          | Delete selected worktree (with confirmation)     |
+| p          | Push selected branch to origin                   |
+| l          | Pull selected branch (fast-forward only)         |
+| r          | Refresh worktree list (fetches from remote)      |
+| q          | Quit                                             |
+| Up / Down  | Navigate worktree list                           |
+
+> Refresh (and initial load) automatically runs `git fetch --prune origin` so
+> behind counts always reflect the remote state. Pull (`l`) uses `--ff-only`
+> and will refuse branches that have diverged or have no remote tracking branch.
+
 ## Troubleshooting
 
 - "gwm: command not found": run `npm link` (local) or `npm install -g git-worktree-manager`, then restart your shell.
