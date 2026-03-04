@@ -1,5 +1,15 @@
-import { describe, it, expect } from 'vitest';
-import { isValidBranchName, pullBranch, fetchRemote } from '../operations.js';
+import { describe, it, expect, vi } from 'vitest';
+import { isValidBranchName } from '../operations.js';
+
+// Mock runGit to avoid real git calls
+vi.mock('../runner.js', () => ({
+  runGit: vi.fn(),
+}));
+
+import { pullBranch, fetchRemote } from '../operations.js';
+import { runGit } from '../runner.js';
+
+const mockedRunGit = vi.mocked(runGit);
 
 describe('isValidBranchName', () => {
   it('should accept valid branch names', () => {
@@ -51,23 +61,65 @@ describe('isValidBranchName', () => {
 });
 
 describe('pullBranch', () => {
-  it('rejects when worktree path does not exist', async () => {
-    await expect(
-      pullBranch('main', '/tmp/__nonexistent_gwm_test_path__')
-    ).rejects.toThrow();
+  it('succeeds on zero exit code', async () => {
+    mockedRunGit.mockResolvedValueOnce({ stdout: '', stderr: '', exitCode: 0 });
+    await expect(pullBranch('main', '/repo')).resolves.toBeUndefined();
+    expect(mockedRunGit).toHaveBeenCalledWith(
+      ['pull', '--ff-only', 'origin', 'main'],
+      { cwd: '/repo' }
+    );
   });
 
-  it('rejects when branch name is invalid', async () => {
-    // Use a valid cwd (process.cwd()) but an impossible branch name.
-    // git pull will fail, exercising the fallback error message path.
-    await expect(
-      pullBranch('not a valid branch!!!', process.cwd())
-    ).rejects.toThrow();
+  it('throws diverged error when fast-forward not possible', async () => {
+    mockedRunGit.mockResolvedValueOnce({
+      stdout: '', stderr: 'fatal: Not possible to fast-forward, aborting.', exitCode: 1
+    });
+    await expect(pullBranch('main', '/repo')).rejects.toThrow('Branch has diverged');
+  });
+
+  it('throws upstream error when no tracking info', async () => {
+    mockedRunGit.mockResolvedValueOnce({
+      stdout: '', stderr: 'There is no tracking information for the current branch.', exitCode: 1
+    });
+    await expect(pullBranch('main', '/repo')).rejects.toThrow('No upstream tracking branch');
+  });
+
+  it('throws network error when host unreachable', async () => {
+    mockedRunGit.mockResolvedValueOnce({
+      stdout: '', stderr: 'fatal: Could not resolve host: github.com', exitCode: 128
+    });
+    await expect(pullBranch('main', '/repo')).rejects.toThrow('Network error');
+  });
+
+  it('throws auth error on authentication failure', async () => {
+    mockedRunGit.mockResolvedValueOnce({
+      stdout: '', stderr: 'fatal: Authentication failed for remote', exitCode: 128
+    });
+    await expect(pullBranch('main', '/repo')).rejects.toThrow('Authentication failed');
+  });
+
+  it('throws fallback error for unknown failures', async () => {
+    mockedRunGit.mockResolvedValueOnce({
+      stdout: '', stderr: 'something unexpected', exitCode: 1
+    });
+    await expect(pullBranch('main', '/repo')).rejects.toThrow('Failed to pull branch');
   });
 });
 
 describe('fetchRemote', () => {
-  it('should be a function', () => {
-    expect(typeof fetchRemote).toBe('function');
+  it('succeeds on zero exit code', async () => {
+    mockedRunGit.mockResolvedValueOnce({ stdout: '', stderr: '', exitCode: 0 });
+    await expect(fetchRemote('/repo')).resolves.toBeUndefined();
+    expect(mockedRunGit).toHaveBeenCalledWith(
+      ['fetch', '--prune', 'origin'],
+      { cwd: '/repo' }
+    );
+  });
+
+  it('throws on non-zero exit code', async () => {
+    mockedRunGit.mockResolvedValueOnce({
+      stdout: '', stderr: 'fatal: remote error', exitCode: 1
+    });
+    await expect(fetchRemote('/repo')).rejects.toThrow('Failed to fetch from remote');
   });
 });

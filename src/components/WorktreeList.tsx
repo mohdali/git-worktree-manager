@@ -258,14 +258,20 @@ export function WorktreeList({ initialBranchName, worktreesDir, configError }: W
         return;
       }
 
+      // Require status to be available before deciding what to do
+      if (status === undefined) {
+        setMessage({ text: 'Status not available yet — refresh before pulling', type: 'error' });
+        return;
+      }
+
       // Block no remote tracking branch
-      if (status?.remoteExists === false) {
+      if (status.remoteExists === false) {
         setMessage({ text: 'Cannot pull: no remote tracking branch', type: 'error' });
         return;
       }
 
       // Block already up to date (success-style, not error)
-      if (!status || status.behind === 0) {
+      if (status.behind === 0) {
         setMessage({ text: 'Already up to date', type: 'success' });
         return;
       }
