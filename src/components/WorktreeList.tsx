@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { Box, Text, useInput, useApp } from 'ink';
-import { listWorktrees, getWorktreeStatus, removeWorktree, deleteLocalBranch, pushBranch, createWorktree } from '../git/index.js';
+import { listWorktrees, getWorktreeStatus, removeWorktree, deleteLocalBranch, pushBranch, pullBranch, createWorktree, fetchRemote, getRepoRoot } from '../git/index.js';
 import { Worktree, WorktreeStatus } from '../git/types.js';
 import { WorktreeItem } from './WorktreeItem.js';
 import { openInVSCode, EditorError } from '../utils/editor.js';
@@ -37,6 +37,14 @@ export function WorktreeList({ initialBranchName, worktreesDir, configError }: W
   // Fetch worktrees (reusable function)
   const fetchWorktrees = useCallback(async () => {
     try {
+      // Fetch remote once per refresh cycle; swallow errors (offline is OK)
+      try {
+        const root = await getRepoRoot();
+        await fetchRemote(root);
+      } catch {
+        // Network/auth failures must not block the UI
+      }
+
       const wts = await listWorktrees();
       setWorktrees(wts);
       setIsLoading(false);
@@ -237,6 +245,48 @@ export function WorktreeList({ initialBranchName, worktreesDir, configError }: W
       }
     }
 
+    // Pull branch from remote
+    if (input === 'l') {
+      if (worktrees.length === 0) return;
+
+      const selected = worktrees[selectedIndex];
+      const status = statuses.get(selected.path);
+
+      // Block detached HEAD
+      if (!selected.branch) {
+        setMessage({ text: 'Cannot pull: detached HEAD', type: 'error' });
+        return;
+      }
+
+      // Block no remote tracking branch
+      if (status?.remoteExists === false) {
+        setMessage({ text: 'Cannot pull: no remote tracking branch', type: 'error' });
+        return;
+      }
+
+      // Block already up to date (success-style, not error)
+      if (!status || status.behind === 0) {
+        setMessage({ text: 'Already up to date', type: 'success' });
+        return;
+      }
+
+      // Execute pull
+      setMessage({ text: `Pulling ${selected.branch}...`, type: 'success' });
+      try {
+        await pullBranch(selected.branch, selected.path);
+        setMessage({
+          text: `Branch '${selected.branch}' pulled from origin`,
+          type: 'success'
+        });
+        fetchWorktrees();
+      } catch (err) {
+        setMessage({
+          text: `Pull failed: ${err instanceof Error ? err.message : 'Unknown error'}`,
+          type: 'error'
+        });
+      }
+    }
+
     // Refresh worktree list
     if (input === 'r') {
       setIsRefreshing(true);
@@ -350,7 +400,7 @@ export function WorktreeList({ initialBranchName, worktreesDir, configError }: W
 
           {/* Help footer */}
           <Box marginTop={1}>
-            <Text dimColor>[Enter/o] Open  [c] Create  [d] Delete  [p] Push  [r] Refresh  [q] Quit</Text>
+            <Text dimColor>[Enter/o] Open  [c] Create  [d] Delete  [p] Push  [l] Pull  [r] Refresh  [q] Quit</Text>
           </Box>
         </>
       )}
